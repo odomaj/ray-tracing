@@ -41,6 +41,66 @@ class Scene:
     image_plane_dist: np.float32
 
 
+def gen_ray(camera_position: Point_3D, pixel_position: Point_3D) -> Point_3D:
+    """generates a point representing a vector from the camera to the pixel"""
+    return -1 * np.array(
+        [
+            pixel_position[0] - camera_position[0],
+            pixel_position[1] - camera_position[1],
+            camera_position[2] - pixel_position[2],
+        ],
+        dtype=np.float32,
+    )
+
+
+def solve_quadratic(
+    a: np.float32, b: np.float32, c: np.float32
+) -> np.float32 | None:
+    im: np.float32 = np.power(b, 2) - (4 * a * c)
+    if im < 0:
+        return None
+    im = np.sqrt(im)
+
+    sol_1 = ((-1 * b) + im) / (2 * a)
+    sol_2 = ((-1 * b) - im) / (2 * a)
+
+    return min(sol_1, sol_2)
+
+
+def closest_intersection(
+    camera_position: Point_3D,
+    ray: Point_3D,
+    spheres: list[Sphere],
+) -> int | None:
+    """returns the index of the first sphere to intersect the ray"""
+    sphere_index: int | None = None
+    sphere_intersection: int | None = None
+    a: np.float32 = np.dot(ray, ray)
+    for i in range(len(spheres)):
+        start_to_center: Point_3D = camera_position - spheres[i].center
+        b: np.float32 = np.dot(start_to_center, ray)
+        b += b
+        c: np.float32 = (
+            np.dot(start_to_center, start_to_center) - spheres[i].radius
+        )
+
+        intersection: np.float32 = solve_quadratic(a, b, c)
+        if intersection is not None:
+            if sphere_index is not None:
+                if intersection < sphere_intersection:
+                    sphere_index = i
+                    sphere_intersection = intersection
+            else:
+                sphere_index = i
+                sphere_intersection = intersection
+
+    return sphere_index
+
+
+def shade(sphere: Sphere, lights: list[Light]) -> Color_RGB:
+    return np.ones(3, dtype=np.float32)
+
+
 def render_scene(
     scene: Scene,
     spheres: list[Sphere],
@@ -54,8 +114,25 @@ def render_scene(
         iii) Shade each pixel using Blinn-Phong Shading
     """
     pixels: Raster_RGB_NxM = np.zeros(
-        (scene.image_height, scene.image_width, 3), dtype=np.float32
+        (scene.image_height, scene.image_width, 3),
+        dtype=np.float32,
     )
+    pixel_position: Point_3D = np.array(
+        [0, 0, scene.image_plane_dist + scene.camera_position[2]],
+        dtype=np.float32,
+    )
+    y_factor = scene.image_height / scene.image_plane_height
+    x_factor = scene.image_width / scene.image_plane_width
+    for y in range(len(pixels)):
+        for x in range(len(pixels)):
+            pixel_position[0] = x / x_factor - 1
+            pixel_position[1] = y / y_factor - 1
+            ray: Point_3D = gen_ray(scene.camera_position, pixel_position)
+            close_sphere: int = closest_intersection(
+                scene.camera_position, ray, spheres
+            )
+            if close_sphere is not None:
+                pixels[y, x] = shade(spheres[close_sphere], lights)
     return pixels
 
 
