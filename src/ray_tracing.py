@@ -43,7 +43,7 @@ class Scene:
 
 def gen_ray(camera_position: Point_3D, pixel_position: Point_3D) -> Point_3D:
     """generates a point representing a vector from the camera to the pixel"""
-    return -1 * np.array(
+    return np.array(
         [
             pixel_position[0] - camera_position[0],
             pixel_position[1] - camera_position[1],
@@ -98,7 +98,7 @@ def closest_intersection(
 
 
 def shade(sphere: Sphere, lights: list[Light]) -> Color_RGB:
-    return np.ones(3, dtype=np.float32)
+    return sphere.color
 
 
 def render_scene(
