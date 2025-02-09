@@ -56,7 +56,7 @@ def gen_ray(camera_position: Point_3D, pixel_position: Point_3D) -> Point_3D:
 def solve_quadratic(
     a: np.float32, b: np.float32, c: np.float32
 ) -> np.float32 | None:
-    im: np.float32 = np.power(b, 2) - (4 * a * c)
+    im: np.float32 = np.square(b) - (4 * a * c)
     if im < 0:
         return None
     im = np.sqrt(im)
@@ -97,8 +97,55 @@ def closest_intersection(
     return sphere_index
 
 
-def shade(sphere: Sphere, lights: list[Light]) -> Color_RGB:
-    return sphere.color
+def normalize(vector: np.ndarray) -> np.ndarray:
+    return vector / np.sqrt(np.dot(vector, vector))
+
+
+def shade(
+    camera_position: Point_3D,
+    ray: Point_3D,
+    sphere: Sphere,
+    lights: list[Light],
+) -> Color_RGB:
+
+    ambiant_light = 1
+    phong_coefficient = 2
+
+    a: np.float32 = np.dot(ray, ray)
+    start_to_center: Point_3D = camera_position - sphere.center
+    b: np.float32 = np.dot(start_to_center, ray)
+    b += b
+    c: np.float32 = np.dot(start_to_center, start_to_center) - np.square(
+        sphere.radius
+    )
+
+    intersection: np.float32 = solve_quadratic(a, b, c) * ray + camera_position
+    normal_vector = normalize(sphere.center - intersection)
+    total_light = 0.0
+    for light in lights:
+        light_vector = normalize(intersection - light.position)
+
+        total_light += (
+            sphere.kd
+            * light.intensity
+            * max(0, np.dot(normal_vector, light_vector))
+        )
+
+        total_light += (
+            sphere.ks
+            * light.intensity
+            * np.power(
+                max(
+                    0,
+                    np.dot(normal_vector, normalize(light_vector + ray)),
+                ),
+                phong_coefficient,
+            )
+        )
+
+    total_light += sphere.ka * ambiant_light
+
+    return sphere.color * total_light
 
 
 def render_scene(
@@ -132,7 +179,9 @@ def render_scene(
                 scene.camera_position, ray, spheres
             )
             if close_sphere is not None:
-                pixels[y, x] = shade(spheres[close_sphere], lights)
+                pixels[y, x] = shade(
+                    scene.camera_position, ray, spheres[close_sphere], lights
+                )
     return pixels
 
 
