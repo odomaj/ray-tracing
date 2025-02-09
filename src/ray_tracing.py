@@ -80,8 +80,8 @@ def closest_intersection(
         start_to_center: Point_3D = camera_position - spheres[i].center
         b: np.float32 = np.dot(start_to_center, ray)
         b += b
-        c: np.float32 = (
-            np.dot(start_to_center, start_to_center) - spheres[i].radius
+        c: np.float32 = np.dot(start_to_center, start_to_center) - np.square(
+            spheres[i].radius
         )
 
         intersection: np.float32 = solve_quadratic(a, b, c)
