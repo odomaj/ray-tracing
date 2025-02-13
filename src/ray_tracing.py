@@ -71,7 +71,7 @@ def closest_intersection(
     camera_position: Point_3D,
     ray: Point_3D,
     spheres: list[Sphere],
-) -> int | None:
+) -> tuple[int, Point_3D] | None:
     """returns the index of the first sphere to intersect the ray"""
     sphere_index: int | None = None
     sphere_intersection: int | None = None
@@ -94,7 +94,10 @@ def closest_intersection(
                 sphere_index = i
                 sphere_intersection = intersection
 
-    return sphere_index
+    if sphere_index is not None:
+        return (sphere_index, sphere_intersection * ray + camera_position)
+    else:
+        return None
 
 
 def normalize(vector: np.ndarray) -> np.ndarray:
@@ -102,24 +105,14 @@ def normalize(vector: np.ndarray) -> np.ndarray:
 
 
 def shade(
-    camera_position: Point_3D,
+    intersection: Point_3D,
     ray: Point_3D,
     sphere: Sphere,
     lights: list[Light],
+    ambiant_light: np.float32,
+    phong_coefficient: np.float32,
 ) -> Color_RGB:
 
-    ambiant_light = 1
-    phong_coefficient = 2
-
-    a: np.float32 = np.dot(ray, ray)
-    start_to_center: Point_3D = camera_position - sphere.center
-    b: np.float32 = np.dot(start_to_center, ray)
-    b += b
-    c: np.float32 = np.dot(start_to_center, start_to_center) - np.square(
-        sphere.radius
-    )
-
-    intersection: np.float32 = solve_quadratic(a, b, c) * ray + camera_position
     normal_vector = normalize(sphere.center - intersection)
     total_light = 0.0
     for light in lights:
@@ -175,12 +168,17 @@ def render_scene(
             pixel_position[0] = x / x_factor - 1
             pixel_position[1] = y / y_factor - 1
             ray: Point_3D = gen_ray(scene.camera_position, pixel_position)
-            close_sphere: int = closest_intersection(
+            close_sphere: tuple[int, Point_3D] | None = closest_intersection(
                 scene.camera_position, ray, spheres
             )
             if close_sphere is not None:
                 pixels[y, x] = shade(
-                    scene.camera_position, ray, spheres[close_sphere], lights
+                    close_sphere[1],
+                    ray,
+                    spheres[close_sphere[0]],
+                    lights,
+                    1,
+                    1,
                 )
     return pixels
 
