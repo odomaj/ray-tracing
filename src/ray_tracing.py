@@ -41,6 +41,10 @@ class Scene:
     image_plane_dist: np.float32
 
 
+def normalize(vector: np.ndarray) -> np.ndarray:
+    return vector / np.sqrt(np.dot(vector, vector))
+
+
 def gen_ray(camera_position: Point_3D, pixel_position: Point_3D) -> Point_3D:
     """generates a point representing a vector from the camera to the pixel"""
     return np.array(
@@ -56,6 +60,7 @@ def gen_ray(camera_position: Point_3D, pixel_position: Point_3D) -> Point_3D:
 def solve_quadratic(
     a: np.float32, b: np.float32, c: np.float32
 ) -> np.float32 | None:
+    """finds real solutions to ax^2+bx+c=0"""
     im: np.float32 = np.square(b) - (4 * a * c)
     if im < 0:
         return None
@@ -72,9 +77,13 @@ def closest_intersection(
     ray: Point_3D,
     spheres: list[Sphere],
 ) -> tuple[int, Point_3D] | None:
-    """returns the index of the first sphere to intersect the ray"""
+    """returns the index of the first sphere to intersect the ray, along with
+    the point of intersection"""
     sphere_index: int | None = None
     sphere_intersection: int | None = None
+
+    # solves for the first point in time the ray intersects each sphere
+    # and saves the sphere that is intersected first
     a: np.float32 = np.dot(ray, ray)
     for i in range(len(spheres)):
         start_to_center: Point_3D = camera_position - spheres[i].center
@@ -100,10 +109,6 @@ def closest_intersection(
         return None
 
 
-def normalize(vector: np.ndarray) -> np.ndarray:
-    return vector / np.sqrt(np.dot(vector, vector))
-
-
 def shade(
     intersection: Point_3D,
     ray: Point_3D,
@@ -112,16 +117,28 @@ def shade(
     ambiant_light: np.float32,
     phong_coefficient: np.float32,
 ) -> Color_RGB:
-
+    """Implementation of the Blinn Phong shading alg"""
     normal_vector = normalize(sphere.center - intersection)
-    total_light = 0.0
+    total_light: Color_RGB = np.zeros(3, dtype=np.float32)
+    # sum the light reflected off of the sphere in the pixel from each light
+    # source, then add ambient light
     for light in lights:
         light_vector = normalize(intersection - light.position)
+
+        color: Color_RGB = np.array(
+            [
+                sphere.color[0] * light.color[0],
+                sphere.color[1] * light.color[1],
+                sphere.color[2] * light.color[2],
+            ],
+            dtype=np.float32,
+        )
 
         total_light += (
             sphere.kd
             * light.intensity
             * max(0, np.dot(normal_vector, light_vector))
+            * color
         )
 
         total_light += (
@@ -134,11 +151,11 @@ def shade(
                 ),
                 phong_coefficient,
             )
+            * color
         )
 
-    total_light += sphere.ka * ambiant_light
-
-    return sphere.color * total_light
+    total_light += sphere.ka * ambiant_light * sphere.color
+    return total_light
 
 
 def render_scene(
@@ -146,13 +163,8 @@ def render_scene(
     spheres: list[Sphere],
     lights: list[Light],
 ) -> Raster_RGB_NxM:
-    """TODO:
-    1. complete the function render_scene() to output the final image
-    2. inside the render_scene() function, you need to implement:
-        i)   Compute the ray direction
-        ii)  Find the closest intersection
-        iii) Shade each pixel using Blinn-Phong Shading
-    """
+    """Output a grid of pixels generated from the spheres and lights from the
+    inputs from the scene using ray tracing"""
     pixels: Raster_RGB_NxM = np.zeros(
         (scene.image_height, scene.image_width, 3),
         dtype=np.float32,
@@ -163,8 +175,11 @@ def render_scene(
     )
     y_factor = scene.image_height / scene.image_plane_height
     x_factor = scene.image_width / scene.image_plane_width
+    # for every pixel generate a ray, then find the first sphere that
+    # intersects the ray and shade the frame
     for y in range(len(pixels)):
         for x in range(len(pixels)):
+            # scale pixels to size of frame, then center the frame
             pixel_position[0] = x / x_factor - 1
             pixel_position[1] = y / y_factor - 1
             ray: Point_3D = gen_ray(scene.camera_position, pixel_position)
